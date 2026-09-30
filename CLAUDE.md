@@ -42,7 +42,8 @@ Electrodes go on skin only when nothing in the chain is mains-connected: the lap
 - Stage 2 (DSP port) confirmed on hardware: `plot.py` shows sensible values, wah follows the forearm in REAPER, feel matches the CircuitPython build (checked without guitar).
 - Stage 3 (onboard-LED stand-in) confirmed: blinks while advertising, steady while connected, visible through the sleeve.
 - Stage 4 blocked: no GP27 divider wired. Possible route: the Pico 2 W's onboard VSYS/3 sense (ADC3, shared with the CYW43) if the LiPo Amigo feeds VSYS.
-- Next: stage 5 (discuss USB MIDI options with Rayan first).
+- Stage 5 closed as a measurement only (Rayan's choice): BLE adds ~12 ms median, ≤21 ms worst case vs USB. Test tools in `tools/latency_test/`. The main firmware stays BLE-only; see **Adding USB MIDI later**.
+- The main firmware is ready to play wirelessly. Open: battery sensing (stage 4), button on GP15.
 
 ## Keeping this file current
 
@@ -61,6 +62,8 @@ This file is the project's memory between sessions. You maintain it, not Rayan.
 - The first `picotool load -f` from the blink firmware left the board in a BOOTSEL state picotool couldn't open (no drive mounted); manual BOOTSEL + replug fixed it, and `-f` has worked since.
 - Negotiated interval with CoreMIDI: the 7.5 ms request is "accepted", the link starts at 30 ms, then macOS settles it at **15 ms** (Apple's floor for non-HID accessories). Expect up to ~15 ms of added BLE latency. (A generic bleak connection stays at 30 ms.)
 - macOS reads the Device Information Service: with it, the sleeve shows its name in REAPER instead of "Manufacturer Unavailable - Model Unavailable". Changing it made REAPER list a new MIDI input; the existing Param Learn mapping kept working without re-ticking the enable boxes. The greyed "Pico 2 W" USB device in MIDI Studio is the old CircuitPython build.
+- BLE vs USB latency (test firmware sending a sawtooth as CC 11 over BLE and CC 12 over USB at the same instant; Mac-side `mido` script timing arrivals): BLE arrives later by median ~12 ms, mean ~12 ms, SD ~4 ms, p95 ~17-19 ms, max ~21 ms, min ~2 ms, the same at 10, 50 and 100 ms step rates. At 100 values/s BLE delivered 2999/3000, so latest-wins rarely drops anything. The spread matches waiting for the next 15 ms connection event plus ~5 ms fixed.
+- macOS does not reconnect BLE MIDI by itself after the board reboots (e.g. after flashing); click Connect in Audio MIDI Setup's Bluetooth window.
 - `plot.py` (repo root) skips any serial line that isn't three fields or whose third field isn't an int, so BLE status lines don't break it.
 - Sampling runs in a repeating-timer IRQ; debug lines go through a `queue_t` and are printed by the main loop, so USB printing never delays a sample. Measured 100.2 debug lines/s.
 
@@ -125,7 +128,24 @@ Do one stage, build it, flash it, summarise it (see above), then stop. Move on o
 2. **DSP port.** Full pipeline above, output over BLE, debug prints over USB serial. Rayan checks: `plot.py` shows sensible values and it plays like the CircuitPython build.
 3. **LED on GP16.** Slow breathe while advertising; brightness follows the CC value while connected. *Replaced for now (no LED wired) by the onboard CYW43 LED: 1 Hz blink while advertising, steady while connected.*
 4. **Battery on GP27.** Read the divider (ask for the ratio first); double-blink the LED on low battery (ask for the threshold).
-5. **USB MIDI alongside BLE.** Send the same value as CC 12 over USB MIDI at the same moment as CC 11 over BLE, for a latency comparison in REAPER. USB MIDI and the USB serial console must coexist (composite TinyUSB device), or debug moves to UART. Discuss the options with Rayan before building.
+5. **USB MIDI alongside BLE.** Send the same value as CC 12 over USB MIDI at the same moment as CC 11 over BLE, for a latency comparison in REAPER. USB MIDI and the USB serial console must coexist (composite TinyUSB device), or debug moves to UART. Discuss the options with Rayan before building. *Done as a measurement only; USB MIDI is not in the main firmware.*
+
+## Latency test (`tools/latency_test/`)
+
+- Separate firmware sharing `ble_midi.cpp`, `config.h` and `midi_service.gatt` with the main build. It sends a 0..127 sawtooth as CC 11 over BLE and CC 12 over USB MIDI (USB MIDI only, no serial). `latency.py` times arrivals on the Mac; `results_2026-09-30.json` holds the first run.
+- Build: CMake from `~/.pico-sdk/cmake/` with `-S tools/latency_test -B tools/latency_test/build -G Ninja`, then ninja. Flash with `picotool load -x ... -f` from the main firmware.
+- Run: connect "EMG Sleeve" in Audio MIDI Setup's Bluetooth window (macOS doesn't reconnect after a reboot), then `latency.py` from a venv with `mido` and `python-rtmidi`.
+- Restore: `latency.py --reboot` puts the board in BOOTSEL over USB MIDI, then `picotool load -x build/emg_sleeve.uf2` (no `-f`).
+
+## Adding USB MIDI later
+
+Rayan may want USB MIDI in the main firmware later. The working pieces are in `tools/latency_test/`: `tusb_config.h`, `usb_descriptors.c`, and the `tud_init(0)` / `tud_task()` / `tud_midi_stream_write()` loop in `latency_main.cpp`. To add it:
+
+- Link `tinyusb_device`, copy in `tusb_config.h` and `usb_descriptors.c`, call `tud_init(0)` at startup and `tud_task()` continuously in the main loop. The debug loop must then stop blocking (`queue_try_remove` instead of `queue_remove_blocking`).
+- TinyUSB is not interrupt-safe: the sample IRQ should post the CC value, and the main loop writes it.
+- Serial conflict. The SDK's USB serial (`pico_stdio_usb`) owns USB with its own descriptors, so pick one and ask Rayan:
+  - (a) USB MIDI only, as in the test firmware. `plot.py` loses its serial port; reflash via `latency.py --reboot` or BOOTSEL.
+  - (b) Composite CDC + MIDI: add a CDC interface to the descriptors and keep stdio on it. `picotool -f` also needs the SDK's reset interface added back (or the 1200-baud reset); check it before relying on unattended flashing.
 
 ## Open items (ask, don't assume)
 
