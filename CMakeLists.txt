@@ -47,6 +47,7 @@ pico_enable_stdio_usb(emg_sleeve 1)
 # Add the standard library to the build
 target_link_libraries(emg_sleeve
         pico_stdlib
+        hardware_adc
         pico_cyw43_arch_none
         pico_btstack_ble
         pico_btstack_cyw43)

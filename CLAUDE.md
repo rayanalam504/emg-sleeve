@@ -39,7 +39,8 @@ Electrodes go on skin only when nothing in the chain is mains-connected: the lap
 ## Status
 
 - Stage 1 (BLE skeleton) confirmed on hardware: advertises as "EMG Sleeve", connects from Audio MIDI Setup, CC 11 sweep drives a MIDI-learned param in REAPER, reconnects after disconnect.
-- Next: stage 2 (DSP port).
+- Stage 2 (DSP port) confirmed on hardware: `plot.py` shows sensible values, wah follows the forearm in REAPER, feel matches the CircuitPython build (checked without guitar).
+- Next: stage 3 (LED on GP16).
 
 ## Keeping this file current
 
@@ -57,7 +58,9 @@ This file is the project's memory between sessions. You maintain it, not Rayan.
 - Serial output printed at boot is lost before the host opens the port. To check advertising without Rayan, scan/connect from the Mac with `bleak` in a scratch venv.
 - The first `picotool load -f` from the blink firmware left the board in a BOOTSEL state picotool couldn't open (no drive mounted); manual BOOTSEL + replug fixed it, and `-f` has worked since.
 - Negotiated interval with CoreMIDI: the 7.5 ms request is "accepted", the link starts at 30 ms, then macOS settles it at **15 ms** (Apple's floor for non-HID accessories). Expect up to ~15 ms of added BLE latency. (A generic bleak connection stays at 30 ms.)
-- In REAPER the sleeve is listed as "Manufacturer Unavailable - Model Unavailable - EMG Sleeve" (no Device Information Service). Param Learn needs "Enable input for control messages" ticked on that input. The greyed "Pico 2 W" USB device in MIDI Studio is the old CircuitPython build.
+- macOS reads the Device Information Service: with it, the sleeve shows its name in REAPER instead of "Manufacturer Unavailable - Model Unavailable". Changing it made REAPER list a new MIDI input; the existing Param Learn mapping kept working without re-ticking the enable boxes. The greyed "Pico 2 W" USB device in MIDI Studio is the old CircuitPython build.
+- `plot.py` (repo root) skips any serial line that isn't three fields or whose third field isn't an int, so BLE status lines don't break it.
+- Sampling runs in a repeating-timer IRQ; debug lines go through a `queue_t` and are printed by the main loop, so USB printing never delays a sample. Measured 100.2 debug lines/s.
 
 ## Git
 
@@ -126,3 +129,4 @@ Do one stage, build it, flash it, summarise it (see above), then stop. Move on o
 
 - Battery divider ratio and low-battery threshold (stage 4).
 - Button wiring on GP15 and whether it gets a job.
+- How the LiPo Amigo output reaches the Pico (VSYS directly or through a diode). Until known, disconnect the LiPo while on USB.
