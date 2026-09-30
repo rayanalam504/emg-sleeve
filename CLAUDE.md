@@ -34,12 +34,12 @@ Electrodes go on skin only when nothing in the chain is mains-connected: the lap
 - Flash: use picotool from `~/.pico-sdk/picotool/`: `picotool load -x build/emg_sleeve.uf2 -f`. The `-f` flag reboots a running board into BOOTSEL over USB, so no button press is needed while the current firmware has USB stdio. If it fails, ask Rayan to hold BOOTSEL and replug.
 - Serial: `/dev/tty.usbmodem*` at 115200. Read it non-interactively (e.g. a short pyserial script), never `screen`. Close the port afterwards so Rayan's `plot.py` can use it.
 - Build after every change. Never leave the tree in a non-building state at the end of a turn.
-- Reference code: clone `https://github.com/raspberrypi/pico-examples` to `../pico-examples` if it isn't there. The standalone BLE server example under `pico_w/bt/` is the template for advertising, GATT and notifications. `btstack_config.h` comes from `pico_w/bt/config/`.
+- Reference code: clone `https://github.com/raspberrypi/pico-examples` to `../pico-examples` if it isn't there. The BLE examples now live under `bluetooth/` (not `pico_w/bt/`); `bluetooth/ble_temp_sensor/server.c` is the template for advertising, GATT and notifications. The shared BTstack config is `bluetooth/config/btstack_config_common.h`, copied into this repo.
 
 ## Status
 
-- Toolchain verified: blink on the CYW43 LED builds, flashes and prints over USB serial.
-- Next: stage 1.
+- Stage 1 (BLE skeleton) confirmed on hardware: advertises as "EMG Sleeve", connects from Audio MIDI Setup, CC 11 sweep drives a MIDI-learned param in REAPER, reconnects after disconnect.
+- Next: stage 2 (DSP port).
 
 ## Keeping this file current
 
@@ -52,7 +52,12 @@ This file is the project's memory between sessions. You maintain it, not Rayan.
 
 ## Learnings
 
-(none yet)
+- Link `pico_cyw43_arch_none` for BLE. It already runs BTstack in the threadsafe-background IRQ; `pico_cyw43_arch_threadsafe_background` pulls in lwIP headers and fails to build.
+- BTstack's ATT server re-forwards HCI events (e.g. disconnect) to its own packet handler, so register a separate ATT handler, not the main HCI one, or events run twice.
+- Serial output printed at boot is lost before the host opens the port. To check advertising without Rayan, scan/connect from the Mac with `bleak` in a scratch venv.
+- The first `picotool load -f` from the blink firmware left the board in a BOOTSEL state picotool couldn't open (no drive mounted); manual BOOTSEL + replug fixed it, and `-f` has worked since.
+- Negotiated interval with CoreMIDI: the 7.5 ms request is "accepted", the link starts at 30 ms, then macOS settles it at **15 ms** (Apple's floor for non-HID accessories). Expect up to ~15 ms of added BLE latency. (A generic bleak connection stays at 30 ms.)
+- In REAPER the sleeve is listed as "Manufacturer Unavailable - Model Unavailable - EMG Sleeve" (no Device Information Service). Param Learn needs "Enable input for control messages" ticked on that input. The greyed "Pico 2 W" USB device in MIDI Studio is the old CircuitPython build.
 
 ## Git
 

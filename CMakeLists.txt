@@ -35,7 +35,7 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(emg_sleeve emg_sleeve.cpp )
+add_executable(emg_sleeve emg_sleeve.cpp ble_midi.cpp)
 
 pico_set_program_name(emg_sleeve "emg_sleeve")
 pico_set_program_version(emg_sleeve "0.1")
@@ -47,7 +47,12 @@ pico_enable_stdio_usb(emg_sleeve 1)
 # Add the standard library to the build
 target_link_libraries(emg_sleeve
         pico_stdlib
-        pico_cyw43_arch_none)
+        pico_cyw43_arch_none
+        pico_btstack_ble
+        pico_btstack_cyw43)
+
+# BLE MIDI GATT database -> generated midi_service.h
+pico_btstack_make_gatt_header(emg_sleeve PRIVATE "${CMAKE_CURRENT_LIST_DIR}/midi_service.gatt")
 
 # Add the standard include files to the build
 target_include_directories(emg_sleeve PRIVATE
