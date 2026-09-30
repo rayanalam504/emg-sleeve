@@ -29,6 +29,18 @@ static std::atomic<int> pending{-1};  // latest CC value not yet sent, -1 = noth
 static btstack_packet_callback_registration_t hci_cb, l2cap_cb, sm_cb;
 static async_when_pending_worker_t send_worker;
 
+#define LED_BLINK_MS 500
+static btstack_timer_source_t led_timer;
+static bool led_on = false;
+
+// Onboard LED: blinks while advertising, steady on while connected.
+static void led_tick(btstack_timer_source_t *ts) {
+    led_on = con_handle != HCI_CON_HANDLE_INVALID ? true : !led_on;
+    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, led_on);
+    btstack_run_loop_set_timer(ts, LED_BLINK_MS);
+    btstack_run_loop_add_timer(ts);
+}
+
 static void print_interval(const char *what, uint16_t units) {
     // units of 1.25 ms
     printf("%s, interval %u.%02u ms\n", what, units * 125 / 100, 25 * (units & 3));
@@ -145,6 +157,10 @@ void ble_midi_init() {
 
     send_worker.do_work = send_worker_fn;
     async_context_add_when_pending_worker(cyw43_arch_async_context(), &send_worker);
+
+    led_timer.process = &led_tick;
+    btstack_run_loop_set_timer(&led_timer, LED_BLINK_MS);
+    btstack_run_loop_add_timer(&led_timer);
 
     hci_power_control(HCI_POWER_ON);
 }

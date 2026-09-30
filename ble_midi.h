@@ -2,6 +2,7 @@
 #include <cstdint>
 
 // Start BTstack, advertise as "EMG Sleeve" with the BLE MIDI service.
+// Also drives the onboard LED: blinking while advertising, steady while connected.
 // Call once, after cyw43_arch_init().
 void ble_midi_init();
 

@@ -17,9 +17,9 @@ Rayan is a physics student. He's fluent in Python and NumPy and not in C++, so h
 
 - Board: Raspberry Pi Pico 2 W (RP2350, CYW43 radio). `PICO_BOARD=pico2_w`.
 - GP26 (ADC0): MyoWare ENV output. The MyoWare is powered from 3V3, the same rail as the ADC reference.
-- GP27 (ADC1): battery voltage divider. Divider ratio unknown, so ask before stage 4.
+- GP27 (ADC1): reserved for a battery voltage divider, but **no divider is wired**.
 - GP15: button. Unused for now. Wiring (active-low or active-high) unknown, so ask if needed.
-- GP16: LED, PWM.
+- GP16: reserved for an LED, but **no LED is wired yet**.
 - Power: single-cell LiPo through a LiPo Amigo charge board (no power switch).
 - Onboard LED: driven through the CYW43 (`cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, ...)`), not a normal GPIO.
 
@@ -40,7 +40,9 @@ Electrodes go on skin only when nothing in the chain is mains-connected: the lap
 
 - Stage 1 (BLE skeleton) confirmed on hardware: advertises as "EMG Sleeve", connects from Audio MIDI Setup, CC 11 sweep drives a MIDI-learned param in REAPER, reconnects after disconnect.
 - Stage 2 (DSP port) confirmed on hardware: `plot.py` shows sensible values, wah follows the forearm in REAPER, feel matches the CircuitPython build (checked without guitar).
-- Next: stage 3 (LED on GP16).
+- Stage 3 (onboard-LED stand-in) confirmed: blinks while advertising, steady while connected, visible through the sleeve.
+- Stage 4 blocked: no GP27 divider wired. Possible route: the Pico 2 W's onboard VSYS/3 sense (ADC3, shared with the CYW43) if the LiPo Amigo feeds VSYS.
+- Next: stage 5 (discuss USB MIDI options with Rayan first).
 
 ## Keeping this file current
 
@@ -121,12 +123,12 @@ Do one stage, build it, flash it, summarise it (see above), then stop. Move on o
 
 1. **BLE skeleton.** Advertise as "EMG Sleeve"; while connected, send CC 11 sweeping 0 to 127 and back, about once every 2 s. No ADC yet. Rayan checks: it appears in Audio MIDI Setup (MIDI Studio, Bluetooth), connects, and moves a MIDI-learned control in REAPER.
 2. **DSP port.** Full pipeline above, output over BLE, debug prints over USB serial. Rayan checks: `plot.py` shows sensible values and it plays like the CircuitPython build.
-3. **LED on GP16.** Slow breathe while advertising; brightness follows the CC value while connected.
+3. **LED on GP16.** Slow breathe while advertising; brightness follows the CC value while connected. *Replaced for now (no LED wired) by the onboard CYW43 LED: 1 Hz blink while advertising, steady while connected.*
 4. **Battery on GP27.** Read the divider (ask for the ratio first); double-blink the LED on low battery (ask for the threshold).
 5. **USB MIDI alongside BLE.** Send the same value as CC 12 over USB MIDI at the same moment as CC 11 over BLE, for a latency comparison in REAPER. USB MIDI and the USB serial console must coexist (composite TinyUSB device), or debug moves to UART. Discuss the options with Rayan before building.
 
 ## Open items (ask, don't assume)
 
-- Battery divider ratio and low-battery threshold (stage 4).
+- Battery sensing for stage 4: wire a divider on GP27, or use the onboard VSYS sense; plus a low-battery threshold.
 - Button wiring on GP15 and whether it gets a job.
 - How the LiPo Amigo output reaches the Pico (VSYS directly or through a diode). Until known, disconnect the LiPo while on USB.
